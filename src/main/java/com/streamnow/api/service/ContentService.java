@@ -9,6 +9,7 @@ import com.streamnow.api.repository.ContentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -124,5 +125,13 @@ public class ContentService {
     public Page<ContentDto> filterByGenre(String genre, Pageable pageable) {
         return contentRepository.filterByGenre("\"" + genre + "\"", pageable)
                 .map(ContentDto::fromEntity);
+    }
+
+    public List<ContentDto> getRecommendedContent() {
+        // Simple recommendation logic - top rated content
+        return contentRepository.findAll(Sort.by(Sort.Direction.DESC, "rating")).stream()
+                .limit(5)
+                .map(ContentDto::fromEntity)
+                .collect(Collectors.toList());
     }
 }

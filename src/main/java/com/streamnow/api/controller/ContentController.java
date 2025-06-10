@@ -52,4 +52,9 @@ public class ContentController {
         Pageable pageable = PageRequest.of(page, size);
         return ResponseEntity.ok(contentService.filterByGenre(genre, pageable));
     }
+
+    @GetMapping("/recommended")
+    public ResponseEntity<List<ContentDto>> getRecommendedContent() {
+        return ResponseEntity.ok(contentService.getRecommendedContent());
+    }
 }
