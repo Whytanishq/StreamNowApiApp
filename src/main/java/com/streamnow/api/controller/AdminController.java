@@ -1,9 +1,13 @@
 package com.streamnow.api.controller;
 
 import com.streamnow.api.dto.ContentDto;
+import com.streamnow.api.entity.Content;
 import com.streamnow.api.service.ContentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,5 +45,14 @@ public class AdminController {
     public ResponseEntity<Void> deleteContent(@PathVariable String id) {
         contentService.deleteContent(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // Add to AdminController.java
+    @GetMapping("/filter")
+    public ResponseEntity<Page<ContentDto>> filterContent(
+            @RequestParam(required = false) String genre,
+            @RequestParam(required = false) Content.Type type,
+            @PageableDefault(size = 10) Pageable pageable) {
+        return ResponseEntity.ok(contentService.filterContent(genre, type, pageable));
     }
 }

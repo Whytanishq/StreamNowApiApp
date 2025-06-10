@@ -57,4 +57,10 @@ public class ContentController {
     public ResponseEntity<List<ContentDto>> getRecommendedContent() {
         return ResponseEntity.ok(contentService.getRecommendedContent());
     }
+
+    // Add to ContentController.java
+    @GetMapping("/trending")
+    public ResponseEntity<List<ContentDto>> getTrendingContent() {
+        return ResponseEntity.ok(contentService.getTrendingContent());
+    }
 }
