@@ -1,0 +1,35 @@
+name: API Tests
+on: [push]
+
+jobs:
+  postman-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: matt-ball/newman-action@v1
+        with:
+          collection: postman/StreamNow_API.postman_collection.json
+          environment: postman/StreamNow_Dev.postman_environment.json
+
+  load-tests:
+    needs: postman-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker environment
+        run: |
+          docker-compose up -d --build
+          sleep 15  # Wait for containers to initialize
+
+      - name: Install k6
+        uses: grafana/k6-action@v0.3.0
+
+      - name: Run load test
+        run: k6 run loadtest.js
+        env:
+          K6_BROWSER_ENABLED: false  # Disable browser module if not needed
+
+      - name: Tear down Docker environment
+        if: always()
+        run: docker-compose down

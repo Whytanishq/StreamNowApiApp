@@ -18,6 +18,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class JwtService {
+
     private final JwtConfig jwtConfig;
     private Key key;
 
@@ -26,6 +27,7 @@ public class JwtService {
         this.key = Keys.hmacShaKeyFor(jwtConfig.getSecret().getBytes());
     }
 
+    // Main token generator with all metadata
     public String generateToken(User user) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", user.getRole().name());
@@ -36,6 +38,18 @@ public class JwtService {
                 .setSubject(user.getId().toString())
                 .setIssuer(jwtConfig.getIssuer())
                 .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + jwtConfig.getExpiration()))
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    // Simplified alternative token generator
+    public String generateBasicToken(User user) {
+        return Jwts.builder()
+                .setClaims(new HashMap<>() {{
+                    put("role", user.getRole());
+                    put("email", user.getEmail());
+                }})
                 .setExpiration(new Date(System.currentTimeMillis() + jwtConfig.getExpiration()))
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();

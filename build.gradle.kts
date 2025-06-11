@@ -22,6 +22,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0")
+	implementation("com.giffing.bucket4j.spring.boot.starter:bucket4j-spring-boot-starter:0.9.0")
 
 	// Database
 	runtimeOnly("com.mysql:mysql-connector-j")

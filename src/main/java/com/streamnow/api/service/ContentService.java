@@ -4,10 +4,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.streamnow.api.dto.ContentDto;
 import com.streamnow.api.entity.Content;
+import com.streamnow.api.entity.User;
 import com.streamnow.api.exception.ResourceNotFoundException;
 import com.streamnow.api.repository.ContentRepository;
+import com.streamnow.api.repository.WatchlistRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -22,6 +26,7 @@ public class ContentService {
 
     private final ContentRepository contentRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final WatchlistRepository watchlistRepository;
 
     public ContentDto createContent(ContentDto contentDto) {
         Content content = mapToEntity(contentDto);
@@ -37,6 +42,7 @@ public class ContentService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable("content")
     public ContentDto getContentById(String id) {
         Content content = contentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Content not found with id: " + id));
@@ -66,8 +72,6 @@ public class ContentService {
         }
         contentRepository.deleteById(id);
     }
-
-    // ---------- Utility Methods ----------
 
     private String serializeGenre(List<String> genre) {
         try {
@@ -128,10 +132,49 @@ public class ContentService {
     }
 
     public List<ContentDto> getRecommendedContent() {
-        // Simple recommendation logic - top rated content
         return contentRepository.findAll(Sort.by(Sort.Direction.DESC, "rating")).stream()
                 .limit(5)
                 .map(ContentDto::fromEntity)
                 .collect(Collectors.toList());
     }
+
+    public List<ContentDto> getRecommendedContent(User user) {
+        List<String> topGenres = watchlistRepository.findTopGenresByUser(user.getId());
+
+        if (topGenres.isEmpty()) {
+            // Fallback to general recommendations if no watchlist history
+            return getRecommendedContent();
+        }
+
+        return contentRepository.findByGenreIn(topGenres, PageRequest.of(0, 5))
+                .getContent()
+                .stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
+
+    public Page<ContentDto> filterContent(String genre, Content.Type type, Pageable pageable) {
+        Page<Content> filteredContent;
+
+        if (genre != null && type != null) {
+            filteredContent = contentRepository.findByGenreContainingAndType(genre, type, pageable);
+        } else if (genre != null) {
+            filteredContent = contentRepository.findByGenreContaining(genre, pageable);
+        } else if (type != null) {
+            filteredContent = contentRepository.findByType(type, pageable);
+        } else {
+            filteredContent = contentRepository.findAll(pageable);
+        }
+
+        return filteredContent.map(this::mapToDto);
+    }
+
+    public List<ContentDto> getTrendingContent() {
+        Pageable pageable = PageRequest.of(0, 5);
+        return contentRepository.findTrending(pageable)
+                .stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
+
 }
