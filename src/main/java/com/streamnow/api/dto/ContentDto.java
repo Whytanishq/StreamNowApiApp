@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 
 @Data
 @Builder
@@ -24,11 +25,11 @@ public class ContentDto {
 
     @JsonFormat(pattern = "yyyy-MM-dd")
     private Date releaseDate;
-
     private String thumbnailUrl;
     private String videoUrl;
     private Content.Type type;
     private Double rating;
+    private Set<String> categories;
 
     public static ContentDto fromEntity(Content content) {
         ObjectMapper objectMapper = new ObjectMapper();
@@ -49,6 +50,7 @@ public class ContentDto {
                 .videoUrl(content.getVideoUrl())
                 .type(content.getType())
                 .rating(content.getRating())
+                .categories(content.getCategories())
                 .build();
     }
 }

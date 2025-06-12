@@ -2,12 +2,16 @@ package com.streamnow.api.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.streamnow.api.dto.ContentAnalyticsDto;
 import com.streamnow.api.dto.ContentDto;
 import com.streamnow.api.entity.Content;
+import com.streamnow.api.entity.ContentRating;
 import com.streamnow.api.entity.User;
+import com.streamnow.api.entity.ViewHistory;
 import com.streamnow.api.exception.ResourceNotFoundException;
-import com.streamnow.api.repository.ContentRepository;
-import com.streamnow.api.repository.WatchlistRepository;
+import com.streamnow.api.repository.*;
+import com.streamnow.api.service.JwtService;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -17,6 +21,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -26,7 +31,12 @@ public class ContentService {
 
     private final ContentRepository contentRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final WatchlistRepository watchlistRepository;
+    private final UserRepository userRepository;
+    private final JwtService jwtService;
+    private final ContentRatingRepository ratingRepository;
+    private final ViewHistoryRepository viewHistoryRepository;
+
+
 
     public ContentDto createContent(ContentDto contentDto) {
         Content content = mapToEntity(contentDto);
@@ -127,29 +137,17 @@ public class ContentService {
     }
 
     public Page<ContentDto> filterByGenre(String genre, Pageable pageable) {
-        return contentRepository.filterByGenre("\"" + genre + "\"", pageable)
-                .map(ContentDto::fromEntity);
+        return contentRepository.filterByGenre(
+                List.of(genre), // Java 9+ (or use Collections.singletonList(genre))
+                pageable
+        ).map(ContentDto::fromEntity);
     }
+
 
     public List<ContentDto> getRecommendedContent() {
         return contentRepository.findAll(Sort.by(Sort.Direction.DESC, "rating")).stream()
                 .limit(5)
                 .map(ContentDto::fromEntity)
-                .collect(Collectors.toList());
-    }
-
-    public List<ContentDto> getRecommendedContent(User user) {
-        List<String> topGenres = watchlistRepository.findTopGenresByUser(user.getId());
-
-        if (topGenres.isEmpty()) {
-            // Fallback to general recommendations if no watchlist history
-            return getRecommendedContent();
-        }
-
-        return contentRepository.findByGenreIn(topGenres, PageRequest.of(0, 5))
-                .getContent()
-                .stream()
-                .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
@@ -177,4 +175,92 @@ public class ContentService {
                 .collect(Collectors.toList());
     }
 
+    // ====== NEW METHODS BELOW ======
+
+    public List<ContentDto> createBulkContent(List<ContentDto> contentDtos) {
+        return contentDtos.stream()
+                .map(this::createContent)
+                .collect(Collectors.toList());
+    }
+
+    public ContentAnalyticsDto getContentAnalytics() {
+        long totalContent = contentRepository.count();
+        long moviesCount = contentRepository.countByType(Content.Type.MOVIE);
+        long showsCount = contentRepository.countByType(Content.Type.TV_SHOW);
+        double averageRating = contentRepository.getAverageRating();
+        Map<String, Long> genreDistribution = contentRepository.getGenreDistribution()
+                .stream()
+                .collect(Collectors.toMap(
+                        ContentRepository.GenreCount::getGenre,
+                        ContentRepository.GenreCount::getCount
+                ));
+
+        return ContentAnalyticsDto.builder()
+                .totalContent(totalContent)
+                .moviesCount(moviesCount)
+                .showsCount(showsCount)
+                .genreDistribution(genreDistribution)
+                .averageRating(averageRating)
+                .build();
+    }
+
+    public List<ContentDto> getPersonalizedContent(String token) {
+        try {
+            // Properly handle token format (remove "Bearer " prefix if present)
+            String cleanToken = token.startsWith("Bearer ") ? token.substring(7) : token;
+            Claims claims = jwtService.getClaims(cleanToken);
+            Long userId = Long.parseLong(claims.getSubject());
+
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+            return getRecommendedContent(user);
+        } catch (Exception e) {
+            // Fallback to popular content if any error occurs
+            return getPopularContent();
+        }
+    }
+
+    public List<ContentDto> getRecommendedContent(User user) {
+        // 1. Get user's watch history and ratings
+        List<ViewHistory> watchHistory = viewHistoryRepository.findByUserId(user.getId());
+        List<ContentRating> userRatings = ratingRepository.findByUserId(user.getId());
+
+        // 2. Find similar users (users who rated the same content similarly)
+        List<Long> similarUserIds = findSimilarUsers(user, userRatings);
+
+        // 3. Get top-rated content from similar users
+        List<ContentDto> similarUsersContent = getContentFromSimilarUsers(similarUserIds);
+
+        // 4. Fallback to popular content
+        if (similarUsersContent.isEmpty()) {
+            return getPopularContent();
+        }
+
+        return similarUsersContent;
+    }
+
+    private List<Long> findSimilarUsers(User user, List<ContentRating> userRatings) {
+        // Simple implementation - find users who rated the same content similarly
+        return ratingRepository.findSimilarUsers(
+                user.getId(),
+                userRatings.stream()
+                        .map(r -> r.getContent().getId())
+                        .collect(Collectors.toList()));
+    }
+
+    private List<ContentDto> getContentFromSimilarUsers(List<Long> similarUserIds) {
+        return ratingRepository.findTopRatedContentByUsers(similarUserIds, PageRequest.of(0, 10))
+                .stream()
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
+
+    private List<ContentDto> getPopularContent() {
+        return contentRepository.findAll(Sort.by(Sort.Direction.DESC, "rating"))
+                .stream()
+                .limit(10)
+                .map(this::mapToDto)
+                .collect(Collectors.toList());
+    }
 }

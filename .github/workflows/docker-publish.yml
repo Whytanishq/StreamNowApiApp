@@ -1,5 +1,7 @@
 name: Docker Build & Deploy
+
 on: [push]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -7,3 +9,14 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./gradlew build
       - run: docker-compose up -d --build
+
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: cd streamnow-frontend && npm install && npm run build
+      - uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'streamnow-frontend'
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
+          package: ./streamnow-frontend/build

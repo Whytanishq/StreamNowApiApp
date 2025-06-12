@@ -10,6 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.util.Date;
+import java.util.Set;
 
 @Data
 @Builder
@@ -43,15 +44,28 @@ public class Content {
     @Column(name = "video_url", length = 512, nullable = false)
     private String videoUrl;
 
+    @Column(name = "view_count")
+    private Long viewCount;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Type type;
 
     private Double rating;
 
+    // ===== Added duration field (in minutes) =====
+    @Column(name = "duration")
+    private Integer duration;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Date createdAt;
+
+    // Content.java entity
+    @ElementCollection
+    @CollectionTable(name = "content_categories", joinColumns = @JoinColumn(name = "content_id"))
+    @Column(name = "category")
+    private Set<String> categories;
 
     @UpdateTimestamp
     @Column(name = "updated_at")

@@ -13,8 +13,4 @@ public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
     boolean existsByUserAndContentId(User user, String contentId);
     void deleteByUserAndContentId(User user, String contentId);
 
-    @Query("SELECT DISTINCT c.genre FROM Content c " +
-            "JOIN Watchlist w ON c.id = w.content.id " +
-            "WHERE w.user.id = :userId")
-    List<String> findTopGenresByUser(@Param("userId") Long userId);
 }

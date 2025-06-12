@@ -2,6 +2,9 @@ package com.streamnow.api.controller;
 
 import com.streamnow.api.dto.ContentDto;
 import com.streamnow.api.service.ContentService;
+import com.streamnow.api.service.JwtService;
+import com.streamnow.api.service.ViewHistoryService;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -14,17 +17,15 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/content")
 @RequiredArgsConstructor
+
 public class ContentController {
     private final ContentService contentService;
+    private final JwtService jwtService;
+    private final ViewHistoryService viewHistoryService;
 
     @GetMapping
     public ResponseEntity<List<ContentDto>> getAllContent() {
         return ResponseEntity.ok(contentService.getAllContent());
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<ContentDto> getContentById(@PathVariable String id) {
-        return ResponseEntity.ok(contentService.getContentById(id));
     }
 
     @GetMapping("/paginated")
@@ -62,5 +63,25 @@ public class ContentController {
     @GetMapping("/trending")
     public ResponseEntity<List<ContentDto>> getTrendingContent() {
         return ResponseEntity.ok(contentService.getTrendingContent());
+    }
+
+
+    @GetMapping(value = "/personalized")
+    public ResponseEntity<List<ContentDto>> getPersonalizedContent(
+            @RequestHeader("Authorization") String token) {
+        return ResponseEntity.ok(contentService.getPersonalizedContent(token));
+    }
+
+    @GetMapping("/continue-watching")
+    public ResponseEntity<List<ContentDto>> getContinueWatching(
+            @RequestHeader("Authorization") String token) {
+        Claims claims = jwtService.getClaims(token.replace("Bearer ", ""));
+        Long userId = Long.parseLong(claims.getSubject());
+        return ResponseEntity.ok(viewHistoryService.getContinueWatching(userId));
+    }
+
+    @GetMapping("/details/{id}")
+    public ResponseEntity<ContentDto> getContentById(@PathVariable String id) {
+        return ResponseEntity.ok(contentService.getContentById(id));
     }
 }

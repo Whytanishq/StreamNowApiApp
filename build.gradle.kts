@@ -24,6 +24,7 @@ dependencies {
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0")
 	implementation("com.giffing.bucket4j.spring.boot.starter:bucket4j-spring-boot-starter:0.9.0")
 
+
 	// Database
 	runtimeOnly("com.mysql:mysql-connector-j")
 
