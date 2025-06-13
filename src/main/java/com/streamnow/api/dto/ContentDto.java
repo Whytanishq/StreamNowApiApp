@@ -25,11 +25,16 @@ public class ContentDto {
 
     @JsonFormat(pattern = "yyyy-MM-dd")
     private Date releaseDate;
+
     private String thumbnailUrl;
     private String videoUrl;
     private Content.Type type;
     private Double rating;
     private Set<String> categories;
+
+    private Integer durationMinutes;
+    private Integer releaseYear;
+    private String categoryId;
 
     public static ContentDto fromEntity(Content content) {
         ObjectMapper objectMapper = new ObjectMapper();
@@ -51,6 +56,9 @@ public class ContentDto {
                 .type(content.getType())
                 .rating(content.getRating())
                 .categories(content.getCategories())
+                .durationMinutes(content.getDurationMinutes())
+                .releaseYear(content.getReleaseYear())
+                .categoryId(content.getCategoryId())
                 .build();
     }
 }

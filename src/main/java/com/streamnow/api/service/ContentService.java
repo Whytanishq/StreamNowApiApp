@@ -10,19 +10,21 @@ import com.streamnow.api.entity.User;
 import com.streamnow.api.entity.ViewHistory;
 import com.streamnow.api.exception.ResourceNotFoundException;
 import com.streamnow.api.repository.*;
-import com.streamnow.api.service.JwtService;
 import io.jsonwebtoken.Claims;
+import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.data.domain.*;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.io.RandomAccessFile;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,13 +37,11 @@ public class ContentService {
     private final JwtService jwtService;
     private final ContentRatingRepository ratingRepository;
     private final ViewHistoryRepository viewHistoryRepository;
-
-
+    private final ResourceLoader resourceLoader;
 
     public ContentDto createContent(ContentDto contentDto) {
         Content content = mapToEntity(contentDto);
         content.setId(UUID.randomUUID().toString());
-
         Content saved = contentRepository.save(content);
         return mapToDto(saved);
     }
@@ -137,12 +137,9 @@ public class ContentService {
     }
 
     public Page<ContentDto> filterByGenre(String genre, Pageable pageable) {
-        return contentRepository.filterByGenre(
-                List.of(genre), // Java 9+ (or use Collections.singletonList(genre))
-                pageable
-        ).map(ContentDto::fromEntity);
+        return contentRepository.filterByGenre(List.of(genre), pageable)
+                .map(ContentDto::fromEntity);
     }
-
 
     public List<ContentDto> getRecommendedContent() {
         return contentRepository.findAll(Sort.by(Sort.Direction.DESC, "rating")).stream()
@@ -153,7 +150,6 @@ public class ContentService {
 
     public Page<ContentDto> filterContent(String genre, Content.Type type, Pageable pageable) {
         Page<Content> filteredContent;
-
         if (genre != null && type != null) {
             filteredContent = contentRepository.findByGenreContainingAndType(genre, type, pageable);
         } else if (genre != null) {
@@ -163,19 +159,15 @@ public class ContentService {
         } else {
             filteredContent = contentRepository.findAll(pageable);
         }
-
         return filteredContent.map(this::mapToDto);
     }
 
     public List<ContentDto> getTrendingContent() {
         Pageable pageable = PageRequest.of(0, 5);
-        return contentRepository.findTrending(pageable)
-                .stream()
+        return contentRepository.findTrending(pageable).stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
-
-    // ====== NEW METHODS BELOW ======
 
     public List<ContentDto> createBulkContent(List<ContentDto> contentDtos) {
         return contentDtos.stream()
@@ -188,60 +180,42 @@ public class ContentService {
         long moviesCount = contentRepository.countByType(Content.Type.MOVIE);
         long showsCount = contentRepository.countByType(Content.Type.TV_SHOW);
         double averageRating = contentRepository.getAverageRating();
-        Map<String, Long> genreDistribution = contentRepository.getGenreDistribution()
-                .stream()
+        Map<String, Long> genreDistribution = contentRepository.getGenreDistribution().stream()
                 .collect(Collectors.toMap(
                         ContentRepository.GenreCount::getGenre,
                         ContentRepository.GenreCount::getCount
                 ));
-
         return ContentAnalyticsDto.builder()
                 .totalContent(totalContent)
                 .moviesCount(moviesCount)
                 .showsCount(showsCount)
-                .genreDistribution(genreDistribution)
                 .averageRating(averageRating)
+                .genreDistribution(genreDistribution)
                 .build();
     }
 
     public List<ContentDto> getPersonalizedContent(String token) {
         try {
-            // Properly handle token format (remove "Bearer " prefix if present)
             String cleanToken = token.startsWith("Bearer ") ? token.substring(7) : token;
             Claims claims = jwtService.getClaims(cleanToken);
             Long userId = Long.parseLong(claims.getSubject());
-
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
             return getRecommendedContent(user);
         } catch (Exception e) {
-            // Fallback to popular content if any error occurs
             return getPopularContent();
         }
     }
 
     public List<ContentDto> getRecommendedContent(User user) {
-        // 1. Get user's watch history and ratings
         List<ViewHistory> watchHistory = viewHistoryRepository.findByUserId(user.getId());
         List<ContentRating> userRatings = ratingRepository.findByUserId(user.getId());
-
-        // 2. Find similar users (users who rated the same content similarly)
         List<Long> similarUserIds = findSimilarUsers(user, userRatings);
-
-        // 3. Get top-rated content from similar users
         List<ContentDto> similarUsersContent = getContentFromSimilarUsers(similarUserIds);
-
-        // 4. Fallback to popular content
-        if (similarUsersContent.isEmpty()) {
-            return getPopularContent();
-        }
-
-        return similarUsersContent;
+        return similarUsersContent.isEmpty() ? getPopularContent() : similarUsersContent;
     }
 
     private List<Long> findSimilarUsers(User user, List<ContentRating> userRatings) {
-        // Simple implementation - find users who rated the same content similarly
         return ratingRepository.findSimilarUsers(
                 user.getId(),
                 userRatings.stream()
@@ -250,17 +224,60 @@ public class ContentService {
     }
 
     private List<ContentDto> getContentFromSimilarUsers(List<Long> similarUserIds) {
-        return ratingRepository.findTopRatedContentByUsers(similarUserIds, PageRequest.of(0, 10))
-                .stream()
+        return ratingRepository.findTopRatedContentByUsers(similarUserIds, PageRequest.of(0, 10)).stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
     private List<ContentDto> getPopularContent() {
-        return contentRepository.findAll(Sort.by(Sort.Direction.DESC, "rating"))
-                .stream()
+        return contentRepository.findAll(Sort.by(Sort.Direction.DESC, "rating")).stream()
                 .limit(10)
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
+    }
+
+    public StreamingResponseBody streamContent(String contentId, String rangeHeader) {
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Content not found"));
+        Path videoPath = Paths.get(content.getVideoUrl());  // ✅ FIXED
+        return outputStream -> {
+            try (RandomAccessFile file = new RandomAccessFile(videoPath.toFile(), "r")) {
+                long fileLength = file.length();
+                long rangeStart = 0;
+                long rangeEnd = fileLength - 1;
+
+                if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                    String[] range = rangeHeader.substring(6).split("-");
+                    rangeStart = Long.parseLong(range[0]);
+                    if (range.length > 1) {
+                        rangeEnd = Long.parseLong(range[1]);
+                    }
+                }
+
+                long contentLength = rangeEnd - rangeStart + 1;
+                file.seek(rangeStart);
+                byte[] buffer = new byte[1024 * 8];
+                long remaining = contentLength;
+
+                while (remaining > 0) {
+                    int read = file.read(buffer, 0, (int) Math.min(buffer.length, remaining));
+                    if (read == -1) break;
+                    outputStream.write(buffer, 0, read);
+                    remaining -= read;
+                }
+            }
+        };
+    }
+
+    public ResponseEntity<org.springframework.core.io.Resource> getContentThumbnail(String contentId) {
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Content not found"));
+
+        org.springframework.core.io.Resource resource =
+                resourceLoader.getResource("file:" + content.getThumbnailUrl());  // ✅ FIXED
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .body(resource);
     }
 }

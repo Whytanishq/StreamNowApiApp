@@ -1,10 +1,9 @@
 package com.streamnow.api.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+
+import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -13,6 +12,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "view_history")
 public class ViewHistory {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -28,4 +28,10 @@ public class ViewHistory {
 
     @Column(nullable = false)
     private int totalDuration; // in minutes
+
+    @Column(name = "last_watched_at", nullable = false)
+    private LocalDateTime lastWatchedAt;
+
+    @Column(name = "is_completed", nullable = false)
+    private boolean isCompleted;
 }

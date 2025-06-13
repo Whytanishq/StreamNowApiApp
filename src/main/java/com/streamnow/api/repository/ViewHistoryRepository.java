@@ -10,4 +10,6 @@ public interface ViewHistoryRepository extends JpaRepository<ViewHistory, Long> 
     Optional<ViewHistory> findByUserIdAndContentId(Long userId, String contentId);
     List<ViewHistory> findByUserIdAndProgressLessThan(Long userId, int progress);
     List<ViewHistory> findByUserId(Long userId);
+    List<ViewHistory> findByUserIdAndIsCompletedFalseOrderByLastWatchedAtDesc(Long userId);
+
 }
