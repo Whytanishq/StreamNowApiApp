@@ -2,6 +2,7 @@ package com.streamnow.api.service;
 
 import com.streamnow.api.config.JwtConfig;
 import com.streamnow.api.entity.User;
+import com.streamnow.api.repository.UserSubscriptionRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -20,6 +21,7 @@ import java.util.Map;
 public class JwtService {
 
     private final JwtConfig jwtConfig;
+    private final UserSubscriptionRepository userSubscriptionRepository;
     private Key key;
 
     @PostConstruct
@@ -32,6 +34,7 @@ public class JwtService {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", user.getRole().name());
         claims.put("email", user.getEmail());
+        claims.put("subscribed", hasActiveSubscription(user.getId()));
 
         return Jwts.builder()
                 .setClaims(claims)
@@ -72,5 +75,14 @@ public class JwtService {
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
+    }
+
+    public void updateUserClaims(User user) {
+        // This would be called when subscription status changes
+        // In a real implementation, you might want to invalidate existing tokens
+    }
+
+    private boolean hasActiveSubscription(Long userId) {
+        return userSubscriptionRepository.existsByUserIdAndIsActiveTrue(userId);
     }
 }

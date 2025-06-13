@@ -9,6 +9,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.util.Date;
+import java.util.Set;
 
 @Data
 @Builder
@@ -38,6 +39,12 @@ public class User {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Date updatedAt;
+
+    @ManyToMany(mappedBy = "members")
+    private Set<FamilyPlan> familyPlans;
+
+    @OneToMany(mappedBy = "primaryUser")
+    private Set<FamilyPlan> ownedFamilyPlans;
 
     public enum Role {
         ROLE_ADMIN, ROLE_USER
